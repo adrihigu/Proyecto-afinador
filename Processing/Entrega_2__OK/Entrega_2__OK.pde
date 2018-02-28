@@ -1,12 +1,12 @@
 import processing.serial.*; 
- 
+
+// Variables de decodificación
+
 Serial myPort;                 // The serial port
 byte[] inBuffer= new byte[5];  // Input Byte from serial port
 int buffersize=1;
 int i = 0;
-int val1;                      // Usado para la lectura de datos del ADC1
-int val2;                      // Usado para la lectura de datos del ADC2
-int txtSamples = 2048;           // Numero de valores máximo del archivo de texto
+int txtSamples = 4681;         // Numero de valores máximo del archivo de texto
 long runTime;
 boolean dig1;                  // Sensor digital 1
 boolean dig2;                  // Sensor digital 2
@@ -77,27 +77,21 @@ void serialEvent(Serial myPort) {
     println("BUFFER: ");
     printArray(inBuffer);
   }
-  else{
-    printArray("BUFFER VACIO");
-  }
   
   // Verifica si en buffer está sincronizado
-  syncronize();  
+  syncronize();
   
   if(sync && inBuffer[0] >= 0){  
   // Inicia decodificación del protocolo para la señal del microfono (ADC1)
     if(ADC1){
-      decodeADC1();
-      val1Buffer.append(val1);
-      ADC1=false;
+      val1Buffer.append(decodeADC1());
     }
   // Inicia decodificación del protocolo para la señal del potenciómetro (ADC2)
     if(ADC2){
-      decodeADC2();
-      ADC2=false;
+      val2Buffer.append(decodeADC2());
     }
   // Guardado de las variables en archivos de texto para visualización
-  //  storeOnTxt();
+  //storeOnTxt("FAKEmuest500");
   }
   
   if(sync){  
@@ -106,7 +100,6 @@ void serialEvent(Serial myPort) {
   
   myPort.buffer(buffersize);
 }
-
 
   //
   // Función que cambia la bandera sync cuando encuetra el encabezado del siguiente bloque
@@ -120,66 +113,72 @@ void syncronize(){
 
   //
   // Funcion que decodifica los bytes asignados al ADC1 en el protocolo y guarda el valor en va1
-void decodeADC1(){
+int decodeADC1(){
+  int var1;
   // Lectura del sensor digital 1
-  val1=inBuffer[0] & 0x40;            
-  if(val1==64){
+  var1=inBuffer[0] & 0x40;            
+  if(var1==64){
     dig1=true;
   }
-  if(val1==0){
+  if(var1==0){
     dig1=false;
   }
   
   // Lectura del sensor digital 2
-  val1=inBuffer[0] & 0x20;
-  if(val1==32){
+  var1=inBuffer[0] & 0x20;
+  if(var1==32){
     dig2=true;
   }
-  if(val1==0){
+  if(var1==0){
     dig2=false;
   }
   
   // Lectura del sensor analógico 1
-  val1 = (((inBuffer[0] & 0x1F) << 7) + inBuffer[1]);
+  var1 = (((inBuffer[0] & 0x1F) << 7) + inBuffer[1]);
+  ADC1=false;
+  return var1;
 }
 
   //
   // Funcion que decodifica los bytes asignados al ADC2 en el protocolo y guarda el valor en val2
-void decodeADC2(){
+int decodeADC2(){
+  int var2;
   // Lectura del sensor digital 3
-  val2=inBuffer[2] & 0x40;            
-  if(val2==64){
+  var2=inBuffer[2] & 0x40;            
+  if(var2==64){
     dig3=true;
   }
-  if(val2==0){
+  if(var2==0){
     dig3=false;
   }
   
   // Lectura del sensor digital 4
-  val2=inBuffer[2] & 0x20;
-  if(val2==32){
+  var2=inBuffer[2] & 0x20;
+  if(var2==32){
     dig4=true;
   }
-  if(val2==0){
+  if(var2==0){
     dig4=false;
   }
   
   // Lectura del sensor analógico 1
-  val2 = (((inBuffer[2] & 0x1F) << 7) + inBuffer[3]);
+  var2 = (((inBuffer[2] & 0x1F) << 7) + inBuffer[3]);
   ADC2=false;
+  
+  return var2;
 }
 
   //
   // Guardado de txtSample muestras en archivos de texto, uno para la señal del microfono y otro para la del potenciómetro
-void storeOnTxt(){
+void storeOnTxt(String name){
   if(i<txtSamples){
-    txtBuffer1[i]=str(val1);
-    txtBuffer2[i]=str(val2);
+    txtBuffer1[i]=str(decodeADC1());
+    txtBuffer2[i]=str(decodeADC2());
     i++;
   }
   else{
-    saveStrings("MICROFONO.txt", txtBuffer1);
-    saveStrings("POTENCIOMETRO.txt", txtBuffer2);
+    saveStrings(name + ".txt", txtBuffer1);
+    // saveStrings("POTENCIOMETRO.txt", txtBuffer2);
     txtBuffer1 = new String[txtSamples];
     txtBuffer2 = new String[txtSamples];
     i=0;
@@ -238,7 +237,7 @@ void  plot(int var){
   if(OscCount >= xSamples){
     clear = true;
   }
-
+  
   preVar = var;
   OscCount++;
 }
