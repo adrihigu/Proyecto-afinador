@@ -35,6 +35,9 @@
 #include "AS1.h"
 #include "AD1.h"
 #include "Cap1.h"
+#include "Bit2.h"
+#include "Bit3.h"
+#include "Bit4.h"
 /* Include shared modules, which are used for whole project */
 #include "PE_Types.h"
 #include "PE_Error.h"
@@ -76,31 +79,30 @@ void main(void)
   		case MEDIR:
   			CodError = AD1_Measure(TRUE);
   			CodError = AD1_GetChanValue(0,&ADC1);
-  			signals = 1;
   			estado1 = ENVIAR;
-  			Bit1_NegVal();
+  			signals = 3;
   			if(count>=78){
   	  			CodError = AD1_Measure(TRUE);
   	  			CodError = AD1_GetChanValue(1,&ADC2);
-  	  			signals = 2;
   				estado2=ENVIAR;
   				count=0;
   			}
   			break;
-
+  			
   		case ENVIAR:
-  			ctrama[0]= 0xF0 + signals;                      // Encabezado
-  			ctrama[1]= (ADC1 >> 11) & 0x1F;                 // Primer byte, ADC1
-  			ctrama[2]= (ADC1 >> 4) & 0x7F;                  // Segundo byte, ADC1
+  			ctrama[0]= 0xF1 + estado2;                      					// Header
+  			ctrama[1]= ((ADC1 >> 11) & 0x1F) + (((_PTDD.Byte) & 0x0CU) << 3);	// Primer byte, ADC1
+  			ctrama[2]= (ADC1 >> 4) & 0x7F;                  					// Second byte, ADC1
   			estado1 = ESPERAR;
   			
   			if(estado2==ENVIAR){
-  				ctrama[3]= (ADC2 >> 11) & 0x1F;             // Tercer byte, ADC2
-  				ctrama[4]= (ADC2 >> 4) & 0x7F;              // Cuarto byte, ADC2
+  				ctrama[3]= ((ADC2 >> 11) & 0x1F) + (((_PTAD.Byte) & 0x0CU) << 3);	// Third byte, ADC2
+  				ctrama[4]= (ADC2 >> 4) & 0x7F;              					 	// Forth byte, ADC2
+  	  			signals = 5;
   				estado2 = ESPERAR;
   			}
   			
-  			CodError = AS1_SendBlock(ctrama,1+2*signals,&Enviados);
+  			CodError = AS1_SendBlock(ctrama,signals,&Enviados);
   			break;
   			
   		default:

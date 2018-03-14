@@ -37,12 +37,16 @@
 #include "Bit1.h"
 #include "TI1.h"
 #include "Cap1.h"
+#include "Bit2.h"
+#include "Bit3.h"
+#include "Bit4.h"
 #include "AS1.h"
 #include "AD1.h"
 
 #define ESPERAR 0
-#define MEDIR  1
-#define ENVIAR 2
+#define MEDIR 2
+#define ENVIAR 1
+
 
 extern unsigned char estado1;
 extern unsigned char estado2;

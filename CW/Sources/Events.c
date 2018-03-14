@@ -66,7 +66,6 @@ void TI1_OnInterrupt(void)
 {
   /* Write your code here ... */
 	
-
 	if (estado1 == ESPERAR){
 		estado1 = MEDIR;
 		count++;
@@ -146,7 +145,7 @@ void Cap1_OnCapture(void)
 {
   /* Write your code here ... */
 
-	// BorrÃ© el cÃ³digo del Capture porque todavÃ­a no es relevante....
+	// Borré el código del Capture porque todavía no es relevante....
 	
 }
 
