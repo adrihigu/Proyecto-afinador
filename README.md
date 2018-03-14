@@ -8,3 +8,8 @@ Voice Tuner and its Effects (Nitin Sitaraman, Emmanuel Denloye)
 
 https://people.ece.cornell.edu/land/courses/ece4760/FinalProjects/s2009/ns325_eod2/ns325_eod2/index.html
 
+A Real-Time Audio Processing Framework in Java (University College Ghent, School of Arts. University Ghent, IPEM.)
+
+http://0110.be/tag/TarsosDSP
+https://github.com/JorenSix/TarsosDSP
+
