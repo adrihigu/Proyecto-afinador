@@ -1,97 +1,80 @@
 import processing.serial.*; 
 
 // Variables de recepcion de datos
-Serial myPort;                 // The serial port
-byte[] inBuffer= new byte[5];  // Input Byte from serial port
-int buffersize=1;
-int i = 0;
-int j = 0;
-int txtSamples = 4681;         // Numero de valores máximo del archivo de texto
-long runTime;
-boolean dig1=false;                  // Sensor digital 1
-boolean dig2=false;                  // Sensor digital 2
-boolean dig3=false;                  // Sensor digital 3
-boolean dig4=false;                  // Sensor digital 4
-boolean sync = false;          // Indica si la comunicacion serial esta sincronizada
-boolean ADC1=false;            // Indica si hay datos por recibir del canal de adquisición 1
-boolean ADC2=false;            // Indica si hay datos por recibir del canal de adquisición 2
-String[] txtBuffer1 = new String[txtSamples];
-String[] txtBuffer2 = new String[txtSamples];
+Serial myPort;                                                           // Puerto Serial
+byte[] inBuffer= new byte[5];                                            // Bytes de entrada del puerto serial
+int buffersize=1;                                                        // Tamaño del buffer de entrada
+int txtSamples = 4681;                                                   // Numero de valores máximo del archivo de texto
+boolean dig1=false;                                                      // Sensor digital 1
+boolean dig2=false;                                                      // Sensor digital 2
+boolean dig3=false;                                                      // Sensor digital 3
+boolean dig4=false;                                                      // Sensor digital 4
+boolean sync = false;                                                    // Indica si la comunicacion serial esta sincronizada
+boolean ADC2=false;                                                      // Indica si hay datos por recibir del can//al de adquisición 2
+FloatList val1Buffer = new FloatList();                                  // Guarda las medidas del micrófono tras la decodificación
+float val2=0;                                                            // Cambia al valor de la medida del potenciómetro tras la decodificación
+String[] txtBuffer1 = new String[txtSamples];                            // Buffer que guarda como texto las medidas del ADC1
+String[] txtBuffer2 = new String[txtSamples];                            // Buffer que guarda como texto las medidas del ADC2
 
-// Variables de osciloscopio
-PFont font;
-int ls = 24;
-int numScale = 10;
-int OscCount=0;          // Contador de barrido
-int xSet=4;
-int ySet=3;
-int[] xScale={100, 500, 1000, 5000, 10000, 50000, 100000,500000}; // us
-int[] yScale={50, 100, 200, 300, 500, 1000, 3000};      // Escala en mV
-int xSamples, ySamples;  // Numero de puntos a graficar
-float xLabel, yLabel;    // Longitud de los ejes
-float xLength, yLength;  // Espacio entre puntos
-float sampleTime= 274.658;
-float sampleVolt = 0.732421875; // 3000/4096 mV
-float preVar=0;
-boolean clear=true;   // true cada vez que se llena el osciloscopio o se cambia la escala
-boolean stop=false;    // se cambia con ENTER
-boolean preStop=false;
-boolean dataOK=false;
-FloatList val1Buffer = new FloatList();
-float val2=0; 
+// Variables de osciloscopio y gráfica
+PFont font;                                                              // Tipo de letra
+int ls = 24;                                                             // Constante para espaciado
+int numScale = 10;                                                       // Cantidad de divisiones de X e Y
+int OscCount=0;                                                          // Contador de barrido
+int xSet=4;                                                              // Indica el valor de la escala en X
+int ySet=3;                                                              // Indica el valor de la escala en Y
+int[] xScale={100, 500, 1000, 5000, 10000, 50000, 100000,500000};        // Rango de escalas de X en us
+int[] yScale={50, 100, 200, 300, 500, 1000, 3000};                       // Rango de escalas de Y en mV
+int xSamples, ySamples;                                                  // Numero de puntos a graficar para X e Y
+float xLabel, yLabel;                                                    // Longitud de los ejes X e Y
+float xLength, yLength;                                                  // Espacio entre puntos del eje X e Y
+float sampleTime= 274.658;                                               // Resolución de X = Tiempo de muestreo
+float sampleVolt = 0.732421875;                                          // Resolución de Y = 3000/4096 mV
+boolean clear=true;                                                      // Cuando es true, dibuja el fondo del osciloscopio
+boolean stop=false;                                                      // Cuando es true, deja de dibujar
 
 // Variables de detección de tono
-int dataSize = 1024;
-float sampleRate = 3640.89158153;
-PitchDetector realPitch = new Yin(sampleRate,dataSize);
-float myPitch;
-IntList pitchBuffer = new IntList();
+int dataSize = 1024;                                                     // Cantidad de datos a procesar por el algoritmo YIN
+float sampleRate = 3640.89158153;                                        // Frecuencia de muestreo
+PitchDetector realPitch = new Yin(sampleRate,dataSize);                  // Clase que implementa el metodo del algoritmo YIN
+float myPitch;                                                           // Resultado de la detección de frecuencia
+IntList pitchBuffer = new IntList();                                     // Guarda los tonos detectados en una lista
 
 // Variables de interfaz de usuario
-int refTone;
-int refVolt = 4096;      // Maxima excursion de voltaje que ofrece el potenciometro
-FloatList refFrec = new FloatList();
-float xLenght;
-float yLenght;
-float rectWidth;
-float rectHeight;
-float xLevels = 20;
-float yLevels;
-String down = "02C5";
-String up = "02C4";
+int refTone;                                                             // El tono asociado a la medida del potenciómetro
+int refVolt = 230;                                                      // Maxima excursion de voltaje que ofrece el potenciometro
+FloatList refFrec = new FloatList();                                     // Lista de las frecuencias que se usan para delimitar los tonos musicales
+float xLevels = 20;                                                      // Número máximo de rectangulos en la gráfica = Resolución en X
+float yLevels;                                                           // Cantidad de tonos para Resolución en Y
+float rectWidth;                                                         // Ancho de rectángulos
+float rectHeight;                                                        // Alto de rectángulos
+String down = "02C5";                                                    // Caracter Unicode. Flecha hacia abajo
+String up = "02C4";                                                      // Caracter Unicode. Flecha hacia arriba
  
 void setup(){
-
-  printArray(Serial.list()); 
-
-  myPort = new Serial(this, Serial.list()[0], 115200); 
-  myPort.buffer(buffersize);
-  // Inicializa vector de frecuencias de referencia
-  initRefFrec();
-  
-  yLevels = refFrec.size();
-  
-  size(800,500);
-  initDraw();  
+  size(800,500);                                                         // Inicializa el tamaño de la ventana
+  printArray(Serial.list());                                             // Muestra los puertos seriales disponibles
+  myPort = new Serial(this, Serial.list()[0], 115200);                   // Inicializa el puerto usado para recepción serial
+  myPort.buffer(buffersize);                                             // Ajusta el tamaño del buffer serial, por defecto 1
+  initRefFrec();                                                         // Inicializa el vector de las frecuencias que se usan para delimitan los tonos musicales 
+  yLevels = refFrec.size();                                              // Inicializa el valor de la variable yLevels
+  initDraw();                                                            // Inicializa fuentes de texto, carácteres especiales y variables para graficar
 }
 
 void draw() {
   //oscilloscope();
-  
-  if(!isStop()){
-    if(val1Buffer.size() > dataSize - 1){
-      background(0);
-      println("size = " + val1Buffer.size());
-      myPitch = (realPitch.getPitch(val1Buffer.array())).getPitch();
-      pitchBuffer.append(frec2tone(myPitch));
-      println("DETECTADO: "+ myPitch + ". TONO: " + frec2tone(myPitch));
-      val1Buffer.clear();
-      
-      drawTunner();
-      drawText();
-      drawGraph();
-      
-      if(pitchBuffer.size() > xLevels - 1){
+  if(!isStop()){                                                          // Si no está en pausa...
+    if(val1Buffer.size() > dataSize - 1){                                 // Si hay suficientes datos para el algoritmo en el buffer de audio...
+      myPitch = (realPitch.getPitch(val1Buffer.array())).getPitch();      // Calcula de la frecuencia fudamental con el algoritmo YIN
+      val1Buffer.clear();                                                 // Limpia los valores del buffer de audio
+      pitchBuffer.append(frec2tone(myPitch));                             // Añade el tono musical asociado a la frecuencia determinada en el buffer de tonos
+      println("DETECTADO: "+ myPitch + ". TONO: " + frec2tone(myPitch));  
+      background(0);                                                      // Borra el fondo de la interface
+      drawTunner();                                                       // Dibuja la parte que indica diferencia con respecto al tono deseado
+      drawText();                                                         // Dibuja el nombre de los tonos del tono recibido y el de referencia
+      drawGraph();                                                        // Dibuja el grafico de los tonos que se han captado recientemente y la altura de la barra de referencia
+     
+      if(pitchBuffer.size() > xLevels - 1){                               // Limita el tamaño del buffer de tonos
         pitchBuffer.remove(0);
       }
     }
@@ -107,13 +90,13 @@ void serialEvent(Serial myPort) {
   
   if(sync && inBuffer[0] >= 0){  
   // Inicia decodificación del protocolo para la señal del microfono (ADC1)
-    if(ADC1 && (val1Buffer.size() < dataSize)){
+    if(val1Buffer.size() < dataSize){
       val1Buffer.append(decodeADC1());
-      ADC1 = false;
     } 
   // Inicia decodificación del protocolo para la señal del potenciómetro (ADC2)
     if(ADC2){
       val2 = decodeADC2();
+      println(val2);
       ADC2=false;
     }
   // Guardado de las variables en archivos de texto para visualización
@@ -195,6 +178,7 @@ int decodeADC2(){
   //
   // Guardado de txtSample muestras en archivos de texto, uno para la señal del microfono y otro para la del potenciómetro
 void storeOnTxt(String name){
+  int i = 0;
   if(i<txtSamples){
     txtBuffer1[i]=str(decodeADC1());
     txtBuffer2[i]=str(decodeADC2());
@@ -205,7 +189,6 @@ void storeOnTxt(String name){
     // saveStrings("POTENCIOMETRO.txt", txtBuffer2);
     txtBuffer1 = new String[txtSamples];
     txtBuffer2 = new String[txtSamples];
-    i=0;
     myPort.stop();
   } 
 }
@@ -216,15 +199,12 @@ void nextHeaderRead(){
   switch(inBuffer[buffersize-1]){
     case -15:
       buffersize=3;
-      ADC1=true;
       break;
     case -14:
       buffersize=5;
-      ADC1=true;
       ADC2=true;
       break;
     default:
-      println("ERROR: CABECERA DESINCRONIZADA");
       sync=false;
       buffersize=1;
       break;
@@ -269,6 +249,7 @@ void drawGrid(){
 }
 
 void  plot(float var){
+  float preVar=0;
   stroke(255,0,0);
   if((OscCount < xSamples) && (OscCount != 0)){
     line(2*ls + (OscCount-1) * xLength, height -2*ls - preVar * yLength, 2*ls + OscCount * xLength, height -2*ls - var * yLength);
@@ -332,9 +313,9 @@ void drawTunner(){
 
 void drawGraph(){
   stroke(255);
-  textSize(rectWidth/2.7);
+  textSize(rectWidth/3);
   for(int i = pitchBuffer.size()-1; i >= 0; i--){
-    rectHeight = pitchBuffer.get(i) * yLenght/yLevels;
+    rectHeight = pitchBuffer.get(i) * yLength/yLevels;
     fill(0);
     rect((width-2*ls) - ((pitchBuffer.size()-i)) * rectWidth, (height -2*ls -1) - rectHeight, rectWidth, rectHeight,2);
     fill(255);
@@ -349,8 +330,9 @@ void drawGraph(){
     stroke(255,0,0);
   }
   fill(255);
-  rect(2*ls, height -2*ls - refTone * yLenght/yLevels - 1, xLenght, yLenght/yLevels);
-  
+  text(toneName(pitchBuffer.get(pitchBuffer.size()-1)),width-ls, (height -2*ls -1) - rectHeight);                    // Nombre del tono actual
+  rect(2*ls, height -2*ls - pitchBuffer.get(pitchBuffer.size()-1) * yLength/yLevels - 1, xLength, yLength/yLevels);  // Linea de referencia
+  rect(2*ls, height -2*ls - refTone * yLength/yLevels - 1, xLength, yLength/yLevels);                                // Linea de tono captado 
 }
 
 void drawText(){
@@ -385,10 +367,10 @@ void initDraw(){
   font = createFont("Tahoma",20,true);
   textFont(font,16);
   
-  xLenght = width - 4*ls;
-  yLenght = height - 6*ls;
+  xLength = width - 4*ls;
+  yLength = height - 6*ls;
   
-  rectWidth = xLenght/xLevels;
+  rectWidth = xLength/xLevels;
   n = unhex(down);
   chars = Character.toChars(n);
   down = new String(chars);
@@ -424,12 +406,36 @@ int volt2tone(float pitchVolt){
 }
 
 boolean isStop(){
-  if(preStop == true && dig1 == false){
+  boolean preStop1=false;
+  boolean preStop2=false;
+  boolean preStop3=false;
+  boolean preStop4=false;
+  
+  if(preStop1 == true && dig1 == false){
     stop=!stop;
   }
-  preStop = dig1;
+
+  if(preStop2 == true && dig2 == false){
+    stop=!stop;
+  }
+    
+  if(preStop3 == true && dig3 == false){
+    stop=!stop;
+  }
+    
+  if(preStop4 == true && dig4 == false){
+    stop=!stop;
+  }
+  
+  preStop1 = dig1;
+  preStop2 = dig2;
+  preStop3 = dig3;
+  preStop4 = dig4;
+  
   return stop;
 }
+
+
 String toneName(int pitch){
   int tone=-1;
   int oct=-1;
