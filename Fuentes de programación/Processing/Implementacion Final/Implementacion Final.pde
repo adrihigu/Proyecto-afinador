@@ -19,7 +19,7 @@ FloatList val1Buffer = new FloatList();                                  // Guar
 FloatList val2Buffer = new FloatList();                                  // Guarda valor de la medida del potenciómetro tras la decodificación
  
 // Variables de detección de tono
-int dataSize = 1024;                                                     // Cantidad de datos a procesar por el algoritmo YIN
+int dataSize = 512;                                                     // Cantidad de datos a procesar por el algoritmo YIN
 int refSize = int(dataSize/60) + 1;                                      // Cantidad de muestras para referencia del potenciómetro
 float sampleRate = 3640.89158153;                                        // Frecuencia de muestreo
 PitchDetector realPitch = new Yin(sampleRate,dataSize);                  // Clase que implementa el metodo del algoritmo YIN
@@ -30,7 +30,7 @@ IntList pitchBuffer = new IntList();                                     // Guar
 PFont font;                                                              // Tipo de letra
 int ls = 24;                                                             // Constante para espaciado
 int[] refTone = new int[1];                                              // El tono asociado a la medida del potenciómetro
-int refVolt = 150;                                                       // Maxima excursion de voltaje que ofrece el potenciometro
+int refVolt = 2350;                                                       // Maxima excursion de voltaje que ofrece el potenciometro
 int mode;                                                                // Modo de operacion del afinador
 int holdTone;                                                            // Tono mantenido para el modo HOLD
 int[] guitar= {17,22,27,32,36,41};                                       // Tono de las cuerdas de la guitarra (E2, A2, D3, G3, B3, E4)
@@ -95,6 +95,7 @@ void serialEvent(Serial myPort) {
         val2Buffer.remove(0);                // Elimina el elemento más antiguo del buffer para valores del segundo canal
       }
       ADC2=false;                            // Cambia estado a inactivo
+      println("val2 = " + val2Buffer.get(val2Buffer.size()-1));
     }
   }
   if(sync){                                  // Si hay sincronización...
@@ -369,7 +370,6 @@ void initDraw(){
   chars = Character.toChars(n);
   up = new String(chars);
   up = up + " " + up + " " + up + " " + up + " " + up + " " + up + " " + up + " " + up + " " + up + " " + up+ " " + up;
-
 }
 
   /**
