@@ -52,7 +52,7 @@ unsigned char CodError;
 unsigned char ctrama[5];		// Bytes enviado por puerto serial
 unsigned char dig1;
 unsigned char dig2;
-unsigned int Enviados = 2;		// Esta variable no aporta nada más sino el número de elementos del arreglo a enviar.
+unsigned int Enviados = 2;		// Esta variable no aporta nada mÃ¡s sino el nÃºmero de elementos del arreglo a enviar.
 unsigned int signals=1; 		// Numero de medidas analogicas para el envio
 unsigned int count=0;
 unsigned int ADC1;
@@ -78,12 +78,12 @@ void main(void)
   			
   		case MEDIR:
   			CodError = AD1_Measure(TRUE);
-  			CodError = AD1_GetChanValue(0,&ADC1);
+  			CodError = AD1_GetChanValue16(0,&ADC1);
   			estado1 = ENVIAR;
   			signals = 3;
   			if(count>=78){
   	  			CodError = AD1_Measure(TRUE);
-  	  			CodError = AD1_GetChanValue(1,&ADC2);
+  	  			CodError = AD1_GetChanValue16(1,&ADC2);
   				estado2=ENVIAR;
   				count=0;
   			}
