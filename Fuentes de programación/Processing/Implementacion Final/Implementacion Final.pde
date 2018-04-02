@@ -1,118 +1,112 @@
-import processing.serial.*; 
+import processing.serial.*;
+public static final int NONE = 0;
+public static final int HOLD = 1;
+public static final int GUITAR = 2;
+public static final int VIOLIN = 3;
 
 // Variables de recepcion de datos
 Serial myPort;                                                           // Puerto Serial
 byte[] inBuffer= new byte[5];                                            // Bytes de entrada del puerto serial
 int buffersize=1;                                                        // Tamaño del buffer de entrada
-int txtSamples = 4681;                                                   // Numero de valores máximo del archivo de texto
 boolean dig1=false;                                                      // Sensor digital 1
 boolean dig2=false;                                                      // Sensor digital 2
 boolean dig3=false;                                                      // Sensor digital 3
 boolean dig4=false;                                                      // Sensor digital 4
+boolean preDig=false;                                                    // Lectura anterior del sensor digital
 boolean sync = false;                                                    // Indica si la comunicacion serial esta sincronizada
 boolean ADC2=false;                                                      // Indica si hay datos por recibir del can//al de adquisición 2
 FloatList val1Buffer = new FloatList();                                  // Guarda las medidas del micrófono tras la decodificación
-float val2=0;                                                            // Cambia al valor de la medida del potenciómetro tras la decodificación
-String[] txtBuffer1 = new String[txtSamples];                            // Buffer que guarda como texto las medidas del ADC1
-String[] txtBuffer2 = new String[txtSamples];                            // Buffer que guarda como texto las medidas del ADC2
-
-// Variables de osciloscopio y gráfica
-PFont font;                                                              // Tipo de letra
-int ls = 24;                                                             // Constante para espaciado
-int numScale = 10;                                                       // Cantidad de divisiones de X e Y
-int OscCount=0;                                                          // Contador de barrido
-int xSet=4;                                                              // Indica el valor de la escala en X
-int ySet=3;                                                              // Indica el valor de la escala en Y
-int[] xScale={100, 500, 1000, 5000, 10000, 50000, 100000,500000};        // Rango de escalas de X en us
-int[] yScale={50, 100, 200, 300, 500, 1000, 3000};                       // Rango de escalas de Y en mV
-int xSamples, ySamples;                                                  // Numero de puntos a graficar para X e Y
-float xLabel, yLabel;                                                    // Longitud de los ejes X e Y
-float xLength, yLength;                                                  // Espacio entre puntos del eje X e Y
-float sampleTime= 274.658;                                               // Resolución de X = Tiempo de muestreo
-float sampleVolt = 0.732421875;                                          // Resolución de Y = 3000/4096 mV
-boolean clear=true;                                                      // Cuando es true, dibuja el fondo del osciloscopio
-boolean stop=false;                                                      // Cuando es true, deja de dibujar
-
+FloatList val2Buffer = new FloatList();                                  // Guarda valor de la medida del potenciómetro tras la decodificación
+ 
 // Variables de detección de tono
 int dataSize = 1024;                                                     // Cantidad de datos a procesar por el algoritmo YIN
+int refSize = int(dataSize/60) + 1;                                      // Cantidad de muestras para referencia del potenciómetro
 float sampleRate = 3640.89158153;                                        // Frecuencia de muestreo
 PitchDetector realPitch = new Yin(sampleRate,dataSize);                  // Clase que implementa el metodo del algoritmo YIN
 float myPitch;                                                           // Resultado de la detección de frecuencia
-IntList pitchBuffer = new IntList();                                     // Guarda los tonos detectados en una lista
+IntList pitchBuffer = new IntList();                                     // Guarda los tonos detectados
 
 // Variables de interfaz de usuario
-int refTone;                                                             // El tono asociado a la medida del potenciómetro
-int refVolt = 230;                                                      // Maxima excursion de voltaje que ofrece el potenciometro
+PFont font;                                                              // Tipo de letra
+int ls = 24;                                                             // Constante para espaciado
+int[] refTone = new int[1];                                              // El tono asociado a la medida del potenciómetro
+int refVolt = 150;                                                       // Maxima excursion de voltaje que ofrece el potenciometro
+int mode;                                                                // Modo de operacion del afinador
+int holdTone;                                                            // Tono mantenido para el modo HOLD
+int[] guitar= {17,22,27,32,36,41};                                       // Tono de las cuerdas de la guitarra (E2, A2, D3, G3, B3, E4)
+int[] violin= {20,27,34,17};                                             // Tono de las cuerdas de la guitarra (G2, D3, A3, E2)
 FloatList refFrec = new FloatList();                                     // Lista de las frecuencias que se usan para delimitar los tonos musicales
-float xLevels = 20;                                                      // Número máximo de rectangulos en la gráfica = Resolución en X
-float yLevels;                                                           // Cantidad de tonos para Resolución en Y
+float xLevels = 50;                                                      // Número máximo de rectangulos en la gráfica = Resolución en X
+float yLevels;                                                           // Cantidad de tonos = Resolución en Y
 float rectWidth;                                                         // Ancho de rectángulos
 float rectHeight;                                                        // Alto de rectángulos
+String modeMsg = "";                                                     // Mensaje del modo de operación
 String down = "02C5";                                                    // Caracter Unicode. Flecha hacia abajo
 String up = "02C4";                                                      // Caracter Unicode. Flecha hacia arriba
- 
+boolean stop=false;                                                      // Cuando es true, deja de dibujar
+float xLabel, yLabel;                                                    // Longitud de los ejes X e Y
+float xLength, yLength;                                                  // Espacio entre puntos del eje X e Y
+
 void setup(){
-  size(800,500);                                                         // Inicializa el tamaño de la ventana
+  size(1024,700);                                                        // Inicializa el tamaño de la ventana
   printArray(Serial.list());                                             // Muestra los puertos seriales disponibles
   myPort = new Serial(this, Serial.list()[0], 115200);                   // Inicializa el puerto usado para recepción serial
   myPort.buffer(buffersize);                                             // Ajusta el tamaño del buffer serial, por defecto 1
-  initRefFrec();                                                         // Inicializa el vector de las frecuencias que se usan para delimitan los tonos musicales 
+  initRefFrec();                                                         // Inicializa el vector de las frecuencias que se usan para delimitan los tonos musicales
   yLevels = refFrec.size();                                              // Inicializa el valor de la variable yLevels
   initDraw();                                                            // Inicializa fuentes de texto, carácteres especiales y variables para graficar
 }
 
 void draw() {
-  //oscilloscope();
-  if(!isStop()){                                                          // Si no está en pausa...
-    if(val1Buffer.size() > dataSize - 1){                                 // Si hay suficientes datos para el algoritmo en el buffer de audio...
+  if(!stop){                                                              // Si no está en pausa...
+    if(val1Buffer.size() >= dataSize){                                    // Si hay suficientes datos para el algoritmo en el buffer de audio...
       myPitch = (realPitch.getPitch(val1Buffer.array())).getPitch();      // Calcula de la frecuencia fudamental con el algoritmo YIN
       val1Buffer.clear();                                                 // Limpia los valores del buffer de audio
       pitchBuffer.append(frec2tone(myPitch));                             // Añade el tono musical asociado a la frecuencia determinada en el buffer de tonos
-      println("DETECTADO: "+ myPitch + ". TONO: " + frec2tone(myPitch));  
       background(0);                                                      // Borra el fondo de la interface
-      drawTunner();                                                       // Dibuja la parte que indica diferencia con respecto al tono deseado
+      drawPitch();                                                        // Dibuja el grafico de los tonos que se han captado recientemente y la altura de la barra de referencia
+      drawRef();                                                          // Dibuja la parte que indica diferencia con respecto al tono deseado
       drawText();                                                         // Dibuja el nombre de los tonos del tono recibido y el de referencia
-      drawGraph();                                                        // Dibuja el grafico de los tonos que se han captado recientemente y la altura de la barra de referencia
-     
       if(pitchBuffer.size() > xLevels - 1){                               // Limita el tamaño del buffer de tonos
         pitchBuffer.remove(0);
       }
     }
   }
-}
- 
-void serialEvent(Serial myPort) { 
-  // Lectura del buffer de entrada
-  myPort.readBytes(inBuffer);
-  
-  // Verifica si el buffer está sincronizado
-  syncronize();
-  
-  if(sync && inBuffer[0] >= 0){  
-  // Inicia decodificación del protocolo para la señal del microfono (ADC1)
-    if(val1Buffer.size() < dataSize){
-      val1Buffer.append(decodeADC1());
-    } 
-  // Inicia decodificación del protocolo para la señal del potenciómetro (ADC2)
-    if(ADC2){
-      val2 = decodeADC2();
-      println(val2);
-      ADC2=false;
-    }
-  // Guardado de las variables en archivos de texto para visualización
-  //storeOnTxt("FAKEmuest500");
+  if(stop){
+    text(modeMsg + " (PAUSA)",10+textWidth("Modo de operación: "),3*ls);  // Indica el modo de operación y "(PAUSA)"
   }
-  
-  if(sync){  
-    nextHeaderRead();
+  else{
+    text(modeMsg,10+textWidth("Modo de operación: "),3*ls);               // Indica el modo de operación
   }
-  
-  myPort.buffer(buffersize);
 }
 
 //*********************************************** RECEPCION DE DATOS ***************************************************//
-  //
-  // Función que cambia la bandera sync cuando encuetra el encabezado del siguiente bloque
+ 
+void serialEvent(Serial myPort) { 
+  myPort.readBytes(inBuffer);                // Lectura del buffer de entrada
+  syncronize();                              // Verifica si el buffer está sincronizado
+  if(sync && inBuffer[0] >= 0){              // Si hay sincronizacion y si no se está leyendo un encabezado...
+    if(val1Buffer.size() < dataSize){        // Si hay menos datos en el buffer de los necesarios para el algoritmo YIN...
+      val1Buffer.append(decodeChannel1());   // Decodifica la señal del microfono y guarda el valor en una lista
+    } 
+    if(ADC2){                                // Si se ha recibido datos del segundo canal del ADC...
+      val2Buffer.append(decodeChannel2());   // Decodifica la señal del potenciometro y guarda el valor en una lista
+      while(val2Buffer.size() > refSize){    // Si hay más datos de los necesarios para hacer el promedio...
+        val2Buffer.remove(0);                // Elimina el elemento más antiguo del buffer para valores del segundo canal
+      }
+      ADC2=false;                            // Cambia estado a inactivo
+    }
+  }
+  if(sync){                                  // Si hay sincronización...
+    readNextHeader();                        // Lee el encabezado del siguiente bloque
+  }
+  myPort.buffer(buffersize);                 // Cambia el tamaño del buffer de recepción para el siguiente bloque de bytes
+}
+
+  /**
+   * Comprueba si la recepción serial está sincronizada          
+   * 
+   */
 void syncronize(){
   if(!sync){
     if(inBuffer[0] < 0){
@@ -120,82 +114,100 @@ void syncronize(){
     }
   }
 }
-
-  //
-  // Funcion que decodifica los bytes asignados al ADC1 en el protocolo y guarda el valor en va1
-int decodeADC1(){
-  int var1;
-  // Lectura del sensor digital 1
-  var1=inBuffer[0] & 0x40;            
-  if(var1==64){
+  /**
+   * 
+   * retorna valor de la medida del primer canal analógico sin el protocolo y asigna modo de operación de acuerdo
+   * valor de los sensores digitales 1 y 2
+   */
+int decodeChannel1(){
+  preDig = dig1;
+  if((inBuffer[0] & 0x40) == 64){
     dig1=false;
   }
-  if(var1==0){
+  if((inBuffer[0] & 0x40) == 0){
     dig1=true;
   }
+  if(preDig == false && dig1 == true){
+    switch(mode){
+      case NONE:
+        mode = HOLD;
+        holdTone = refTone[0];
+        break;
+      case HOLD:
+        mode = NONE;
+        break;
+      default:
+        break;
+    }
+  }
   
-  // Lectura del sensor digital 2
-  var1=inBuffer[0] & 0x20;
-  if(var1==32){
+  preDig = dig2;
+  if((inBuffer[0] & 0x20) == 32){
     dig2=false;
   }
-  if(var1==0){
+  if((inBuffer[0] & 0x20) == 0){
     dig2=true;
   }
-  
-  // Lectura del sensor analógico 1
-  var1 = (((inBuffer[0] & 0x1F) << 7) + inBuffer[1]);
-  return var1;
+  if(preDig == false && dig2 == true){
+    switch(mode){
+      case NONE:
+        mode = GUITAR;
+        break;
+      case GUITAR:
+        mode = NONE;
+        break;
+      default:
+        break;
+    }
+  }
+  return (((inBuffer[0] & 0x1F) << 7) + inBuffer[1]);
 }
 
-  //
-  // Funcion que decodifica los bytes asignados al ADC2 en el protocolo y guarda el valor en val2
-int decodeADC2(){
-  int var2;
-  // Lectura del sensor digital 3
-  var2=inBuffer[2] & 0x40;            
-  if(var2==64){
+  /**
+   * 
+   * retorna valor de la medida del segundo canal analógico sin el protocolo y asigna modo de operación de acuerdo
+   * valor de los sensores digitales 3 y 4
+   */
+int decodeChannel2(){ 
+  preDig = dig3;
+  if((inBuffer[2] & 0x40)==64){
     dig3=false;
   }
-  if(var2==0){
+  if((inBuffer[2] & 0x40)==0){
     dig3=true;
   }
+  if(preDig == false && dig3 == true){
+    switch(mode){
+      case NONE:
+        mode = VIOLIN;
+        break;
+      case VIOLIN:
+        mode = NONE;
+        break;
+      default:
+        break;
+    }
+  }
   
-  // Lectura del sensor digital 4
-  var2=inBuffer[2] & 0x20;
-  if(var2==32){
+  preDig = dig4;
+  if((inBuffer[2] & 0x20)==32){
     dig4=false;
   }
-  if(var2==0){
+  if((inBuffer[2] & 0x20)==0){
     dig4=true;
   }
-  
-  // Lectura del sensor analógico 1
-  var2 = (((inBuffer[2] & 0x1F) << 7) + inBuffer[3]);
-  return var2;
-}
-
-  //
-  // Guardado de txtSample muestras en archivos de texto, uno para la señal del microfono y otro para la del potenciómetro
-void storeOnTxt(String name){
-  int i = 0;
-  if(i<txtSamples){
-    txtBuffer1[i]=str(decodeADC1());
-    txtBuffer2[i]=str(decodeADC2());
-    i++;
+  if(preDig == false && dig4 == true){
+    stop = !stop;
   }
-  else{
-    saveStrings(name + ".txt", txtBuffer1);
-    // saveStrings("POTENCIOMETRO.txt", txtBuffer2);
-    txtBuffer1 = new String[txtSamples];
-    txtBuffer2 = new String[txtSamples];
-    myPort.stop();
-  } 
+  return (((inBuffer[2] & 0x1F) << 7) + inBuffer[3]);
 }
 
-  //
-  // Función que asigna el tamaño del buffer, bufferSize, de acuerdo al encabezado del siguiente bloque
-void nextHeaderRead(){
+  /**
+   * 
+   * Asigna el tamaño del buffer para la lectura del siguiente bloque de acuerdo al tipo de encabezado (0xF1, 0xF2).
+   * Habilita la lectura del segundo canal analogico y detecta si hay desincronizacion.
+   */
+void readNextHeader(){
   switch(inBuffer[buffersize-1]){
     case -15:
       buffersize=3;
@@ -211,107 +223,14 @@ void nextHeaderRead(){
     }
 }
 
-//*********************************************** OSCILOSCOPIO ***************************************************//
-void oscilloscope(){
-  if(!stop){
-    if(clear){
-      drawGrid();
-      val1Buffer.clear();
-      OscCount = 0;
-      clear=false;
-    }
-    if(val1Buffer.size() != 0){
-      plot(val1Buffer.get(0));
-      val1Buffer.remove(0);
-    }
-  }
-}
-  //
-  // Ploteo
-void drawGrid(){
-  background(255);
-  for(int i=0;i<numScale;i++){
-    stroke(200);
-    line(2*ls,height - 2*ls -(i+1)*(yLabel/numScale),2*ls + xLabel,height - 2*ls -(i+1)*(yLabel/numScale));  // Linea horizontal
-    line(2*ls + (i+1)*(xLabel/numScale),height - 2*ls ,2*ls + (i+1)*(xLabel/numScale),2*ls);  // Linea horizontal
-  }
-  stroke(0);
-  line(2*ls, 2*ls, 2*ls, height -2*ls); // xlabel
-  line(2*ls, height- 2*ls, width - 2*ls, height- 2*ls); // ylabel
-  fill(100);
-  text("Escala X: "+ xScale[xSet] + "us", 2*ls, height -ls);
-  text("Escala Y: "+ yScale[ySet] + "mV", 3*ls + textWidth("Escala X: "+ xScale[xSet] + "us") , height -ls);
-  
-  xSamples = int(numScale*xScale[xSet]/sampleTime);
-  xLength = xLabel/xSamples;
-  ySamples= int(numScale*yScale[ySet]/sampleVolt);
-  yLength= yLabel/ySamples;
-}
-
-void  plot(float var){
-  float preVar=0;
-  stroke(255,0,0);
-  if((OscCount < xSamples) && (OscCount != 0)){
-    line(2*ls + (OscCount-1) * xLength, height -2*ls - preVar * yLength, 2*ls + OscCount * xLength, height -2*ls - var * yLength);
-  }
-  
-  if(OscCount >= xSamples){
-    clear = true;
-  }
-  
-  preVar = var;
-  OscCount++;
-}
-
-void keyPressed(){
-    if(key == CODED){
-      switch(keyCode){
-        case RIGHT:
-          if(xSet!=xScale.length-1)
-            xSet++;
-          break;
-        case LEFT:
-          if(xSet!=0)
-            xSet--;
-          break;
-        case UP:
-          if(ySet!=yScale.length-1)
-            ySet++;
-          break;
-        case DOWN:
-          if(ySet!=0)
-            ySet--;
-          break;
-      }
-      clear = true;
-    }
-    if(key == 32)
-      stop = !stop;  
-}
 //*********************************************** INTERFAZ DE USUARIO ***************************************************//
 
-void drawTunner(){
-  refTone = volt2tone(val2);
-  
-  if(pitchBuffer.get(pitchBuffer.size()-1) > refTone){
-    fill(255, 0, 0);
-    text(down, width -2*ls - textWidth(down), ls);
-    text("Por encima de la nota...",width -2*ls - (textWidth("Por encima de la nota...") + textWidth(down))/2, 2*ls);
-  }
-  if(pitchBuffer.get(pitchBuffer.size()-1) == refTone){
-    fill(0, 255, 0);
-    text(down, width -2*ls - textWidth(down), ls);
-    text("¡En la nota!",width -2*ls - (textWidth("¡En la nota!") + textWidth(up))/2, 2*ls);
-    text(up, width -2*ls - textWidth(up), 3*ls);
-  }
-  if(pitchBuffer.get(pitchBuffer.size()-1) < refTone){
-    fill(255, 0, 0);
-    text(up, width -2*ls - textWidth(up), 3*ls);
-    text("Por debajo de la nota...",width -2*ls - (textWidth("Por debajo de la nota...") + textWidth(up))/2, 2*ls);
-  }
-}
-
-void drawGraph(){
+  /**
+   * 
+   * Dibuja el grafico de barras verticales asociado a los tonos captados anteriormente.
+   * Dibuja la barra horizontal de que indica el tono captado más recientemente y su nombre a la derecha.
+   */
+void drawPitch(){
   stroke(255);
   textSize(rectWidth/3);
   for(int i = pitchBuffer.size()-1; i >= 0; i--){
@@ -320,38 +239,104 @@ void drawGraph(){
     rect((width-2*ls) - ((pitchBuffer.size()-i)) * rectWidth, (height -2*ls -1) - rectHeight, rectWidth, rectHeight,2);
     fill(255);
     text(toneName(pitchBuffer.get(pitchBuffer.size()-(i+1))),(width-2*ls) - (i+1) * rectWidth,(height -2*ls -1) + ls);
-}
+  }
   fill(0);
   textSize(16);
-  if(pitchBuffer.get(pitchBuffer.size()-1) == refTone){
+  if(pitchBuffer.get(pitchBuffer.size()-1) == refTone[0]){
     stroke(0,255,0);
   }
   else{
     stroke(255,0,0);
   }
-  fill(255);
-  text(toneName(pitchBuffer.get(pitchBuffer.size()-1)),width-ls, (height -2*ls -1) - rectHeight);                    // Nombre del tono actual
-  rect(2*ls, height -2*ls - pitchBuffer.get(pitchBuffer.size()-1) * yLength/yLevels - 1, xLength, yLength/yLevels);  // Linea de referencia
-  rect(2*ls, height -2*ls - refTone * yLength/yLevels - 1, xLength, yLength/yLevels);                                // Linea de tono captado 
+  rectHeight = pitchBuffer.get(pitchBuffer.size() - 1) * yLength/yLevels;
+  fill(255);                    // OJO: queremos rectHeight = pitchBuffer.get(pitchBuffer.size() - 1) * yLength/yLevels;
+  text(toneName(pitchBuffer.get(pitchBuffer.size()-1)), width-textWidth(toneName(pitchBuffer.get(pitchBuffer.size()-1))), (height -2*ls -1) - rectHeight);          // Nombre del tono de audio actual
+  rect(2*ls, height -2*ls - pitchBuffer.get(pitchBuffer.size()-1) * yLength/yLevels - 1, xLength, yLength/yLevels);                                                   // Linea de tono captado
+}
+ 
+  /**
+   * 
+   * Determina el tono de referencia de acuerdo al modo seleccionado por el usuario.
+   * Dibuja las barras de referencia de acuerdo al modo de operación y su nombre a la izquierda.
+   */
+void drawRef(){
+  refTone[0] = 0;
+  switch(mode){
+    case NONE:
+      for(int i = 0; i < val2Buffer.size() - 1; i++){
+        refTone[0] += val2Buffer.get(i);
+      }
+      refTone[0] = volt2tone(refTone[0]/val2Buffer.size());   
+      displayRef(refTone);
+      break;
+    case HOLD:
+      refTone[0] = holdTone;
+      displayRef(refTone);
+      break;
+    case GUITAR:
+      displayRef(guitar);
+      break;
+    case VIOLIN:
+      displayRef(violin);
+      break;
+  }
 }
 
+  /**
+   * 
+   * Dibuja texto que indica si se está por encima, por debajo o en el tono de referencia.
+   */
 void drawText(){
   fill(255);
   text("Tono captado: ",10,ls);
-  text(toneName(pitchBuffer.get(pitchBuffer.size()-1)),10+textWidth("Tono captado: "),ls);
+  text(toneName(pitchBuffer.get(pitchBuffer.size()-1)),10 + textWidth("Tono captado: "),ls);
   
-  text("Frecuencia: ",10,2*ls);
-  text(myPitch,10+textWidth("Frecuencia: "),2*ls);
-  
-  text("Tono de referencia: ",10,3*ls);
-  text(toneName(refTone),10+textWidth("Tono de referencia: "),3*ls); // FALTA TONO REFERENCIA
+  text("Tono de referencia: ",10,2*ls);
+  text(toneName(refTone[0]),10+textWidth("Tono de referencia: "),2*ls);
+
+  text("Modo de operación: ",10,3*ls);  
+  switch(mode){
+    case NONE:
+      modeMsg = "Dinámico";
+      break;
+    case HOLD:
+      modeMsg = "Estático";
+      break;
+    case GUITAR:
+      modeMsg = "Guitarra";
+      break;
+    case VIOLIN:
+      modeMsg = "Violín";
+      break;
+  }
+    
+  if(pitchBuffer.get(pitchBuffer.size()-1) > refTone[0]){
+    fill(255, 0, 0);
+    text(down, width -2*ls - textWidth(down), ls);
+    text("Por encima de la nota...",width -2*ls - (textWidth("Por encima de la nota...") + textWidth(down))/2, 2*ls);
+  }
+  if(pitchBuffer.get(pitchBuffer.size()-1) == refTone[0]){
+    fill(0, 255, 0);
+    text(down, width -2*ls - textWidth(down), ls);
+    text("¡En la nota!",width -2*ls - (textWidth("¡En la nota!") + textWidth(up))/2, 2*ls);
+    text(up, width -2*ls - textWidth(up), 3*ls);
+  }
+  if(pitchBuffer.get(pitchBuffer.size()-1) < refTone[0]){
+    fill(255, 0, 0);
+    text(up, width -2*ls - textWidth(up), 3*ls);
+    text("Por debajo de la nota...",width -2*ls - (textWidth("Por debajo de la nota...") + textWidth(up))/2, 2*ls);
+  }
 }
 
+  /**
+   * 
+   * Inicializa la lista de frecuencias que delimitan el criterio de desición para escojer un tono en particular.
+   */
 void initRefFrec(){
   int tone = 1;
   int oct = 0;
   while(tone <= 12 && oct <= 5){
-    refFrec.append( (frec(tone-1,oct) + frec(tone,oct))/2 );
+    refFrec.append((frec(tone-1,oct) + frec(tone,oct))/2 );
     tone++;
     if(tone > 12){
       oct++;
@@ -360,6 +345,10 @@ void initRefFrec(){
   }
 }
 
+  /**
+   * 
+   * Inicializa la fuente del texto, la longitud de los ejes, ancho de los rectangulos del grafico y caracteres UNICODE usados
+   */
 void initDraw(){
   int n;
   char[] chars;
@@ -383,10 +372,21 @@ void initDraw(){
 
 }
 
+  /**
+   * 
+   * Retorna la frecuencia asociada del tono en su octava.
+   * tone: Toma valores del 1 al 12. Representan DO, DO#, RE, RE#, MI, FA, FA#, SOL, SOL#, LA, LA#, SI.
+   * oct: Toma valores del 1 al 5. Octava en la que se ubica el tono.
+   */
 float frec(float tone, float oct){
   return(440 * exp( ((oct-3) + (tone-10)/12) * log(2)));
 }
 
+  /**
+   * 
+   * Retorna entero que representa el tono asociado a la frecuencia recibida
+   * pitchFrec: frecuencia detectada del primer canal analógico (Micrófono)
+   */
 int frec2tone(float pitchFrec){
   for(int i=0; i < refFrec.size() -1; i++){
     if((pitchFrec >= refFrec.get(i)) && (pitchFrec <= refFrec.get(i+1))){
@@ -396,6 +396,10 @@ int frec2tone(float pitchFrec){
   return -1;
 }
 
+  /**
+   * Retorna entero que representa el tono asociado al voltaje de referencia recibido
+   * pitchVolt: voltaje detectado del segundo canal analógico (Potenciómetro)
+   */
 int volt2tone(float pitchVolt){
   for(int i=0; i < refFrec.size() -1; i++){
     if((pitchVolt >= (refVolt/refFrec.size())*i) && (pitchVolt <= (refVolt/refFrec.size())*(i+1))){
@@ -405,37 +409,11 @@ int volt2tone(float pitchVolt){
   return -1;
 }
 
-boolean isStop(){
-  boolean preStop1=false;
-  boolean preStop2=false;
-  boolean preStop3=false;
-  boolean preStop4=false;
-  
-  if(preStop1 == true && dig1 == false){
-    stop=!stop;
-  }
-
-  if(preStop2 == true && dig2 == false){
-    stop=!stop;
-  }
-    
-  if(preStop3 == true && dig3 == false){
-    stop=!stop;
-  }
-    
-  if(preStop4 == true && dig4 == false){
-    stop=!stop;
-  }
-  
-  preStop1 = dig1;
-  preStop2 = dig2;
-  preStop3 = dig3;
-  preStop4 = dig4;
-  
-  return stop;
-}
-
-
+  /**
+   * 
+   * Retorna string con el nombre del tono musical en su octava, ò "???" si no se reconoce.
+   * pitch: tono cuyo nombre se desea obtener
+   */
 String toneName(int pitch){
   int tone=-1;
   int oct=-1;
@@ -484,13 +462,58 @@ String toneName(int pitch){
       name = name + "Si";
       break;
     default:
-      println("ERROR: No pitch name: " + pitch);
       return "???";
   }
   return name + oct;
 }
-//*********************************************** DETECCION DE TONO ***************************************************//
 
+  /**
+   * 
+   * Dibuja las barras de referencia en el gráfico de tonos captados y su nombre.
+   * lines: arreglo cuyos elementos indican la altura de cada barra de referencia.
+   */
+void displayRef(int[] lines){
+  for(int i = 0; i < lines.length; i++){
+    if(pitchBuffer.get(pitchBuffer.size()-1) == lines[i]){
+      stroke(0,255,0);
+    }
+    else{
+      stroke(0,0,255);
+    }
+    fill(255);
+    rect(2*ls, height -2*ls - lines[i] * yLength/yLevels - 1, xLength, yLength/yLevels);                         // Linea de referencia
+    text(toneName(lines[i]), 0, (height -2*ls -1) - yLength/yLevels * lines[i]);                               // Nombre del tono de referencia actual
+  }
+}
+
+  /**
+   * 
+   * Interrupción por teclado para la barra espaciadora (caracter " ")
+   * Detiene o arranca el procesamiento de datos al presionar la barra espaciadora.
+   */
+void keyPressed(){
+    if(key == 32){
+      stop = !stop;
+    }
+    
+}
+//*********************************************** DETECCION DE TONO ***************************************************//
+/*
+* Implementación del algoritmo por parte de TarsosDPS
+*-------------------------------------------------------------
+*
+* TarsosDSP is developed by Joren Six at IPEM, University Ghent
+*  
+* -------------------------------------------------------------
+*
+*  Info: http://0110.be/tag/TarsosDSP
+*  Github: https://github.com/JorenSix/TarsosDSP
+*  Releases: http://0110.be/releases/TarsosDSP/
+*  
+*  TarsosDSP includes modified source code by various authors,
+*  for credits and info, see README.
+* 
+*/
 public class PitchDetectionResult {  
   /**
    * The pitch in Hertz.
@@ -564,7 +587,6 @@ public class PitchDetectionResult {
     this.pitched = pitched;
   }  
 }
-/////////////////////////////////////////////////////////////////////////
 
 public interface PitchDetector {
   /**
@@ -580,7 +602,6 @@ public interface PitchDetector {
    */
   PitchDetectionResult getPitch(final float[] audioBuffer);
 }
-/////////////////////////////////////////////////////////////////////////
 
 public final class Yin implements PitchDetector {
   /**
